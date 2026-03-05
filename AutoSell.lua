@@ -267,38 +267,51 @@ local markerCast  = makeMarker(Color3.fromRGB(255,200,0),"FISHING")
 local zxcvMarkers = {}
 for i=1,4 do zxcvMarkers[i]=makeMarker(zxcvColors[i],zxcvNames[i]) end
 
--- ======== PANEL CHINH: 220px, doc, goc trai ========
-local PW = 220   -- chieu rong panel
+-- ======== PANEL CHINH: 220px rong, cao co dinh, goc tren trai ========
+local PW = 220
+local PH = 480   -- chieu cao co dinh, khong full man hinh
+
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0,PW,1,0)        -- cao toan man hinh doc
-panel.Position = UDim2.new(0,0,0,0)     -- goc trai
+panel.Size = UDim2.new(0,PW,0,PH)
+panel.Position = UDim2.new(0,0,0,40)   -- goc tren trai, cach top 40px
 panel.BackgroundColor3 = Color3.fromRGB(8,8,18)
-panel.BackgroundTransparency = 0.08
+panel.BackgroundTransparency = 0.05
 panel.BorderSizePixel = 0
-panel.Active = true; panel.Draggable = false
+panel.Active = true; panel.Draggable = true
 panel.ClipsDescendants = true; panel.ZIndex = 10; panel.Parent = sg
 local psk=Instance.new("UIStroke",panel)
-psk.Color=Color3.fromRGB(255,140,0); psk.Thickness=1.5; psk.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+psk.Color=Color3.fromRGB(255,140,0); psk.Thickness=1.5
+psk.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+Instance.new("UICorner",panel).CornerRadius=UDim.new(0,12)
 
--- Thu/mo panel
+-- Thu/mo panel (truot sang trai)
 local panelOpen = true
 local function setPanel(open)
     panelOpen = open
-    TS:Create(panel, TweenInfo.new(0.2,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
-        {Position=UDim2.new(0, open and 0 or -(PW+4), 0, 0)}):Play()
+    TS:Create(panel, TweenInfo.new(0.22,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
+        {Position=UDim2.new(0, open and 0 or -(PW+6), 0, 40)}):Play()
 end
 
--- ======== NUT MO (tab nho ben phai panel) ========
+-- ======== NUT TAB (nam NGOAI panel, gan vao sg) ========
+-- Luon hien, du panel an hay hien
 local tabBtn = Instance.new("TextButton")
-tabBtn.Size = UDim2.new(0,28,0,60)
-tabBtn.Position = UDim2.new(0,PW,0.5,-30)
-tabBtn.BackgroundColor3 = Color3.fromRGB(255,140,0)
-tabBtn.BorderSizePixel = 0; tabBtn.Text = "â—€"; tabBtn.TextColor3 = Color3.new(1,1,1)
-tabBtn.Font = Enum.Font.GothamBold; tabBtn.TextSize = 14; tabBtn.ZIndex = 11; tabBtn.Parent = panel
+tabBtn.Size = UDim2.new(0,30,0,56)
+tabBtn.Position = UDim2.new(0,PW,0,40+PH/2-28)  -- ben phai panel, giua chieu cao
+tabBtn.BackgroundColor3 = Color3.fromRGB(255,130,0)
+tabBtn.BackgroundTransparency = 0
+tabBtn.BorderSizePixel = 0
+tabBtn.Text = "â—€"; tabBtn.TextColor3 = Color3.new(1,1,1)
+tabBtn.Font = Enum.Font.GothamBold; tabBtn.TextSize = 16
+tabBtn.ZIndex = 20; tabBtn.Active = true; tabBtn.Parent = sg
 Instance.new("UICorner",tabBtn).CornerRadius = UDim.new(0,8)
+Instance.new("UIStroke",tabBtn).Color = Color3.fromRGB(255,200,80)
+
 tabBtn.MouseButton1Click:Connect(function()
     setPanel(not panelOpen)
     tabBtn.Text = panelOpen and "â–¶" or "â—€"
+    -- Di chuyen tab button cung voi panel
+    TS:Create(tabBtn, TweenInfo.new(0.22,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
+        {Position=UDim2.new(0, panelOpen and PW or 0, 0, 40+PH/2-28)}):Play()
 end)
 
 -- ======== SCROLLING CONTENT ========
