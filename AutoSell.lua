@@ -41,81 +41,76 @@ local zxcvColors   = {
 }
 
 -- ================================================================
--- MANG CLICK 1: NEM CAN (TouchEvent - nut game)
--- Hoan toan doc lap, co toggle rieng
+-- HE THONG CLICK - 2 MANG DOC LAP, DUNG NGAY KHI TAT
+-- Dung "phien ban token" de giet goroutine cu lap tuc
 -- ================================================================
-local castActive = false
 
-local function doCastClick(x, y)
-    -- Chi dung TouchEvent, khong dung mouse
-    -- Khong co wait ngoai giua cac lan click
-    pcall(function()
-        VIM:SendTouchEvent(x, y, Enum.UserInputState.Begin, 0)
-    end)
+local castActive  = false
+local skillActive = false
+
+-- Token: moi lan start tao token moi, goroutine cu tu thoat
+local castToken  = 0
+local skillToken = 0
+
+-- Click don gian: chi MouseButton, KHONG SendMouseMove (lam lech click)
+local function doClick(x, y)
+    VIM:SendMouseButtonEvent(x, y, 0, true,  game, 0)
     task.wait(0.06)
-    pcall(function()
-        VIM:SendTouchEvent(x, y, Enum.UserInputState.End, 0)
-    end)
+    VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
 end
 
+-- ===== MANG 1: NEM CAN =====
 local function startCastLoop()
+    castToken = castToken + 1
+    local myToken = castToken
     task.spawn(function()
-        while castActive do
+        while castActive and castToken == myToken do
             if savedCastPos and not isSelling then
-                doCastClick(savedCastPos.X, savedCastPos.Y)
+                pcall(doClick, savedCastPos.X, savedCastPos.Y)
             end
-            task.wait(0.5)
+            task.wait(0.45)
         end
     end)
 end
 
--- ================================================================
--- MANG CLICK 2: CHIEU ZXCV (MouseButtonEvent - nut UI)
--- Moi chieu 1 goroutine rieng, cooldown rieng
--- KHONG dung wait chung, KHONG doi nhau
--- ================================================================
-local skillActive = false
-
-local function doSkillClick(x, y)
-    -- Dung MouseButton, di chuyen den dung tam truoc
-    pcall(function()
-        VIM:SendMouseMoveEvent(x, y, game)
-    end)
-    task.wait(0.03)
-    pcall(function()
-        VIM:SendMouseButtonEvent(x, y, 0, true,  game, 0)
-    end)
-    task.wait(0.05)
-    pcall(function()
-        VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
-    end)
-end
+-- ===== MANG 2: MOI CHIEU ZXCV CO TOKEN RIENG =====
+local skillTokens = {0, 0, 0, 0}
 
 local function startSkillLoop(idx)
+    skillTokens[idx] = skillTokens[idx] + 1
+    local myToken = skillTokens[idx]
     task.spawn(function()
-        -- Offset nho de cac chieu khong bat dau cung luc
-        task.wait((idx - 1) * 0.05)
-        while skillActive do
+        task.wait((idx - 1) * 0.08)  -- offset nho tranh bat cung luc
+        while skillActive and skillTokens[idx] == myToken do
             if zxcvPos[idx] and not isSelling then
-                doSkillClick(zxcvPos[idx].X, zxcvPos[idx].Y)
-                -- Doi dung cooldown cua chieu nay (khong block chieu khac)
+                pcall(doClick, zxcvPos[idx].X, zxcvPos[idx].Y)
+                -- Doi cooldown, kiem tra token de thoat ngay khi can
                 local cd = zxcvCooldown[idx] or 1.0
                 local t  = 0
-                while t < cd and skillActive do
+                while t < cd do
                     task.wait(0.05)
                     t = t + 0.05
+                    if not skillActive or skillTokens[idx] ~= myToken then return end
                 end
             else
                 task.wait(0.1)
+                if not skillActive or skillTokens[idx] ~= myToken then return end
             end
         end
     end)
 end
 
 local function startAllSkills()
-    for i = 1, 4 do
-        startSkillLoop(i)
-    end
+    for i = 1, 4 do startSkillLoop(i) end
+end
+
+-- Goi khi muon tat tat ca spam ngay lap tuc
+local function stopAllSpam()
+    castActive  = false
+    skillActive = false
+    -- Tang token -> goroutine cu se thoat o lan kiem tra tiep theo
+    castToken = castToken + 1
+    for i = 1, 4 do skillTokens[i] = skillTokens[i] + 1 end
 end
 
 -- ================================================================
@@ -222,11 +217,10 @@ local function mainLoop()
     end
 
     while isRunning do
-        -- 1. Di ve vi tri cau
-        isSelling    = false
-        castActive   = false
-        skillActive  = false
-        task.wait(0.3)  -- dam bao goroutine cu da dung truoc khi spawn moi
+        -- 1. Di ve vi tri cau â€” dam bao spam da dung truoc
+        isSelling = false
+        stopAllSpam()
+        task.wait(0.15)
 
         local char = LP.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -253,11 +247,10 @@ local function mainLoop()
         end
         if not isRunning then break end
 
-        -- 4. Het gio: dung spam truoc, doi goroutine ket thuc, roi di ban
-        isSelling   = true
-        castActive  = false
-        skillActive = false
-        task.wait(0.6)  -- cho du thoi gian cac goroutine thoat vong while
+        -- 4. Het gio: dung spam NGAY LAP TUC qua token, doi ngan, roi di ban
+        isSelling = true
+        stopAllSpam()
+        task.wait(0.2)  -- ngan thoi, chi de goroutine wake up va kiem tra token
 
         statusText = "Het gio! Di ban..."
         fishCaught  = fishCaught  + 1
@@ -274,9 +267,8 @@ local function mainLoop()
         task.wait(1)
     end
 
-    -- Tat het
-    castActive   = false
-    skillActive  = false
+    -- Tat het ngay lap tuc
+    stopAllSpam()
     isSelling    = false
     countdownSec = 0
     statusText   = "Da tat"
@@ -295,52 +287,62 @@ sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 sg.Parent = LP.PlayerGui
 
 -- ===== MARKERS =====
--- Khi bam vao marker: lay TAM cua marker (AbsolutePosition + Size/2)
--- Day la toa do chinh xac, khong bi lech
+-- Nguyen tac:
+-- Marker la ScreenGui element: AbsolutePosition tinh tu goc man hinh (da tru GuiInset)
+-- VIM.SendMouseButtonEvent nhan toa do VIEWPORT (chua tru GuiInset)
+-- => Khi luu: lay AbsolutePosition + Size/2 (tam marker trong ScreenGui coords)
+--             roi CONG THEM GuiInset (Y = 36px tren Roblox) de doi sang viewport coords
+-- => Khi click: dung toa do viewport nay truc tiep cho VIM
+
+local INSET = game:GetService("GuiService"):GetGuiInset()  -- thuong (0, 36)
+
 local function makeMarker(col, tag)
-    local S = 62
+    local S = 70   -- kich thuoc lon hon, de keo chinh xac hon
     local m = Instance.new("TextButton")
     m.Size = UDim2.new(0,S,0,S)
     m.Position = UDim2.new(0.5,-S/2, 0.5,-S/2)
     m.BackgroundColor3 = col
-    m.BackgroundTransparency = 0.15
+    m.BackgroundTransparency = 0.3
     m.BorderSizePixel = 0
     m.Text = ""; m.ZIndex = 50
     m.Active = true; m.Draggable = true
     m.Visible = false; m.Parent = sg
     Instance.new("UICorner", m).CornerRadius = UDim.new(1,0)
-    local sk = Instance.new("UIStroke", m)
-    sk.Color = Color3.new(1,1,1); sk.Thickness = 2.5
+    Instance.new("UIStroke", m).Color = Color3.new(1,1,1)
 
-    -- Duong ngam (crosshair)
-    local function bar(sz, ps)
-        local f = Instance.new("Frame", m)
-        f.Size = sz; f.Position = ps
-        f.BackgroundColor3 = Color3.new(1,1,0)
-        f.BorderSizePixel = 0; f.ZIndex = 51
-    end
-    bar(UDim2.new(0.65,0,0,2.5), UDim2.new(0.175,0, 0.5,-1.25))
-    bar(UDim2.new(0,2.5,0.65,0), UDim2.new(0.5,-1.25, 0.175,0))
+    -- Crosshair full chieu ngang/doc
+    local ch = Instance.new("Frame", m)
+    ch.Size = UDim2.new(1,0, 0,2)
+    ch.Position = UDim2.new(0,0, 0.5,-1)
+    ch.BackgroundColor3 = Color3.fromRGB(255,255,0)
+    ch.BorderSizePixel = 0; ch.ZIndex = 51
 
-    -- Diem tam do (chinh xac = tam se click)
+    local cv = Instance.new("Frame", m)
+    cv.Size = UDim2.new(0,2, 1,0)
+    cv.Position = UDim2.new(0.5,-1, 0,0)
+    cv.BackgroundColor3 = Color3.fromRGB(255,255,0)
+    cv.BorderSizePixel = 0; cv.ZIndex = 51
+
+    -- Diem do chinh xac o TAM (day la diem VIM se click)
     local dot = Instance.new("Frame", m)
-    dot.Size = UDim2.new(0,8,0,8)
-    dot.Position = UDim2.new(0.5,-4, 0.5,-4)
-    dot.BackgroundColor3 = Color3.fromRGB(255,50,50)
-    dot.BorderSizePixel = 0; dot.ZIndex = 52
+    dot.Size = UDim2.new(0,10,0,10)
+    dot.Position = UDim2.new(0.5,-5, 0.5,-5)
+    dot.BackgroundColor3 = Color3.fromRGB(255,0,0)
+    dot.BorderSizePixel = 0; dot.ZIndex = 53
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
 
-    -- Nhan tag
+    -- Nhan tag ben duoi
     local tl = Instance.new("TextLabel", m)
-    tl.Size = UDim2.new(1,0,0,15)
-    tl.Position = UDim2.new(0,0, 1,3)
-    tl.BackgroundTransparency = 1
+    tl.Size = UDim2.new(1,0,0,16)
+    tl.Position = UDim2.new(0,0, 1,2)
+    tl.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    tl.BackgroundTransparency = 0.4
     tl.Text = tag
-    tl.TextColor3 = Color3.new(1,1,0)
+    tl.TextColor3 = Color3.fromRGB(255,255,0)
     tl.Font = Enum.Font.GothamBlack
     tl.TextSize = 11; tl.ZIndex = 52
+    Instance.new("UICorner", tl).CornerRadius = UDim.new(0,4)
 
-    -- (nhip tim xu ly boi 1 Heartbeat chung o cuoi file)
     return m
 end
 
@@ -718,12 +720,18 @@ Y = Y + 10
 scroll.CanvasSize = UDim2.new(0,0, 0,Y)
 
 -- ===== MARKER BINDINGS =====
--- Lay TAM marker (AbsolutePosition + AbsoluteSize/2) = toa do chinh xac
-local function markerCenter(m)
-    local ap = m.AbsolutePosition
-    local as = m.AbsoluteSize
-    -- AbsolutePosition la goc tren trai, cong them nua kich thuoc = TAM
-    return ap.X + as.X * 0.5, ap.Y + as.Y * 0.5
+-- Tinh toa do viewport chinh xac:
+--   AbsolutePosition = toa do trong ScreenGui (da tru INSET)
+--   VIM can toa do viewport (chua tru INSET)
+--   => cong lai INSET de doi sang viewport coords
+local function getMarkerViewportCenter(m)
+    local ap = m.AbsolutePosition   -- goc tren trai cua marker trong ScreenGui
+    local as = m.AbsoluteSize       -- kich thuoc marker
+    -- Tam marker trong ScreenGui coords
+    local cx = ap.X + as.X * 0.5
+    local cy = ap.Y + as.Y * 0.5
+    -- Doi sang viewport coords (VIM coords) bang cach cong INSET
+    return cx + INSET.X, cy + INSET.Y
 end
 
 local function bindMarker(marker, showBtn, infoLbl, onSave)
@@ -734,11 +742,12 @@ local function bindMarker(marker, showBtn, infoLbl, onSave)
         end
     end)
     marker.MouseButton1Click:Connect(function()
-        local cx, cy = markerCenter(marker)
+        -- Lay toa do viewport chinh xac cua TAM marker
+        local cx, cy = getMarkerViewportCenter(marker)
         onSave(Vector2.new(cx,cy), cx, cy)
         marker.BackgroundColor3 = Color3.fromRGB(30,60,170)
         showBtn.BackgroundColor3 = Color3.fromRGB(18,80,18)
-        statusText = "Luu tam (" .. math.floor(cx) .. "," .. math.floor(cy) .. ")"
+        statusText = "Luu (" .. math.floor(cx) .. "," .. math.floor(cy) .. ")"
     end)
 end
 
@@ -778,13 +787,13 @@ for i = 1, 4 do
     end)
 
     m.MouseButton1Click:Connect(function()
-        local cx, cy = markerCenter(m)
+        local cx, cy = getMarkerViewportCenter(m)
         zxcvPos[i] = Vector2.new(cx, cy)
         sl.Text = "âœ“ (" .. math.floor(cx) .. "," .. math.floor(cy) .. ")"
         sl.TextColor3 = Color3.fromRGB(150,255,150)
         m.BackgroundColor3 = Color3.fromRGB(30,60,170)
         tb.Text = "âœ“ " .. nm; tb.BackgroundColor3 = Color3.fromRGB(18,80,18)
-        statusText = "Luu tam " .. nm .. " (" .. math.floor(cx) .. "," .. math.floor(cy) .. ")"
+        statusText = "Luu " .. nm .. " (" .. math.floor(cx) .. "," .. math.floor(cy) .. ")"
     end)
 end
 
@@ -819,10 +828,9 @@ toggleBtn.MouseButton1Click:Connect(function()
         statusText = "Dang khoi dong..."
         task.spawn(mainLoop)
     else
-        isRunning   = false
-        castActive  = false
-        skillActive = false
+        stopAllSpam()
         stopWalk()
+        isSelling  = false
         statusText = "Da tat"
     end
 end)
@@ -836,27 +844,23 @@ end)
 
 -- ===== TOGGLE DOC LAP: NEM CAN =====
 castToggleBtn.MouseButton1Click:Connect(function()
-    castActive = not castActive
     if castActive then
-        castToggleBtn.Text = "đŸ£  NEM CAN: BAT âœ“"
-        castToggleBtn.BackgroundColor3 = Color3.fromRGB(220,160,0)
-        startCastLoop()
+        castActive = false
+        castToken  = castToken + 1   -- giet goroutine ngay
     else
-        castToggleBtn.Text = "đŸ£  NEM CAN: TAT"
-        castToggleBtn.BackgroundColor3 = Color3.fromRGB(160,110,0)
+        castActive = true
+        startCastLoop()
     end
 end)
 
 -- ===== TOGGLE DOC LAP: CHIEU ZXCV =====
 skillToggleBtn.MouseButton1Click:Connect(function()
-    skillActive = not skillActive
     if skillActive then
-        skillToggleBtn.Text = "â¡  CHIEU ZXCV: BAT âœ“"
-        skillToggleBtn.BackgroundColor3 = Color3.fromRGB(120,60,255)
-        startAllSkills()
+        skillActive = false
+        for i = 1, 4 do skillTokens[i] = skillTokens[i] + 1 end  -- giet goroutine ngay
     else
-        skillToggleBtn.Text = "â¡  CHIEU ZXCV: TAT"
-        skillToggleBtn.BackgroundColor3 = Color3.fromRGB(70,30,180)
+        skillActive = true
+        startAllSkills()
     end
 end)
 
